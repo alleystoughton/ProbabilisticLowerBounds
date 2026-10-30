@@ -1,6 +1,6 @@
 (* Lower Bound Proof for Adaptive Probabilistic Or *)
 
-prover quorum=1 ["Z3" "Alt-Ergo"].
+prover quorum=2 ["Z3" "Alt-Ergo"].
 
 require import AllCore Distr DBool DInterval DProd List StdOrder.
 import RealOrder.
@@ -83,13 +83,19 @@ split; first trivial.
 rewrite (nth_map witness) 1:size_range /=.
 rewrite IntOrder.ler_maxr 1:(lez_trans 1) // 1:ge1_arity.
 rewrite eqT aqb_in_basis /=.
-smt(nth_range).
+have -> /= :
+  0 <= nth witness<:int> (range 0 arity) aqb.`1.`1 < arity.
+  rewrite nth_range //.
+by rewrite nth_range.
 rewrite neqF /some_true negb_exists => i /=.
 rewrite eqT negb_and.
 case (0 <= i < arity) => [i_rng /= | //].
 rewrite (nth_map witness) 1:size_range /=.
 rewrite IntOrder.ler_maxr 1:(lez_trans 1) // 1:ge1_arity.
-smt(nth_range).
+rewrite aqb_in_basis /=.
+have -> // :
+  0 <= nth witness<:int> (range 0 arity) i < arity.
+  by rewrite nth_range.  
 qed.
 
 local module G0 = {
@@ -165,7 +171,9 @@ conseq
    ={glob Alg, i, numq} /\
    r1{1}.`1 = j{2} /\ r1{1}.`2 = b{2} /\ 0 <= j{2} < arity /\
    (r1{1}, ()) \in daux_query_basis).
-progress; [by rewrite duniform_ll | smt()].
+progress.
+by rewrite duniform_ll.
+move : H3; by case r20.
 transitivity{1}
   { r1 <@ PS2.S.sample([0 .. arity - 1], {0,1}); }
   (={glob Alg, i, numq} ==> ={glob Alg, i, numq, r1})
@@ -193,10 +201,10 @@ simplify.
 smt().
 call PS2.sample_sample2; first auto.
 inline; auto; progress.
-smt(supp_dinter).
-smt(supp_dinter).
+rewrite supp_dinter /# in H.
+rewrite supp_dinter /# in H.
 rewrite supp_dprod supp_drange supp_dbool /=.
-smt(supp_dinter).
+rewrite supp_dinter /# in H.
 conseq (_ : _ ==> out{1} = b'{2} /\ aqb{1}.`1.`2 = b{2}).
 progress; congr; case (aux{1}).
 by rewrite f_inputs_eq_aqb12 1:/#.
@@ -385,7 +393,19 @@ wp.
 call (_ : true).
 wp.
 call (_ : true).
-auto; smt(size_cat mem_cat).
+auto; progress.
+smt(size_ge0).
+smt().
+smt(size_cat).
+smt(mem_cat).
+smt().
+rewrite mem_cat /= /# in H4.
+smt(size_ge0).
+smt().
+smt(size_cat).
+smt(size_cat mem_cat).
+smt().
+rewrite mem_cat /= /# in H4.
 auto.
 qed.
 
@@ -626,6 +646,9 @@ apply
 rewrite /=.
 move => numq &m0 ge0_numq /=.
 apply (G_up_bound Alg numq &m0 _ _ _ _) => //.
-rewrite /=.
-smt(ge1_arity).
+move => /= nq1 nq2 [] ge0_nq1 lt_nq1_nq2.
+rewrite ler_lt_add //.
+rewrite ltr_pmul2r.
+rewrite invr_gt0 lt_fromint; smt(ge1_arity).
+by rewrite lt_fromint.
 qed.
