@@ -2,11 +2,12 @@ Probabilistic Lower Bounds in the Query Model in EasyCrypt
 =============================================================
 
 This repository contains a framework for mechanizing in
-[EasyCrypt](https://github.com/EasyCrypt/easycrypt) proofs of lower
-bounds of computatonal problems in the query model.
+[EasyCrypt](https://github.com/EasyCrypt/easycrypt) proofs of
+probabilistic lower bounds of computatonal problems in the query
+model.
 
-So far just a single example proof has been completed: the
-probabilistic or (disjunction) function.
+So far just a single example proof has been completed: the or
+(disjunction) function.
 
 This is joint work between Boston University faculty
 
