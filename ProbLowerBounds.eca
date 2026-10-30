@@ -1,5 +1,7 @@
 (* Probabilistic Lower Bounds Framework *)
 
+prover quorum=2 ["Z3" "Alt-Ergo"].
+
 require import AllCore Distr List StdOrder.
 import RealOrder.
 
@@ -171,32 +173,37 @@ smt().
 qed.
 
 (* lemma taking the main upper bound lemma for a computational problem
-   plus a proof that the bound preserves <= for numbers of queries,
+   plus a proof that the bound preserves < for numbers of queries,
    and concluding that:
 
-   if running G with numq2 queries has a strictly greater probability
-   of Alg winning than the bound for numq1, then numq1 < numq2, so
-   that at least numq1 + 1 queries are needed to achieve the
-   probability of Alg winning that numq2 queries gives *)
+   if running G with numq2 queries has at least the probability
+   of Alg winning as does the bound of numq1, then for all 0 <= numq,
+   if running G with numq queries has at least the probability
+   of Alg winning as does running it with numq2 queries, then
+   numq1 <= numq *)
 
 lemma lower_bound (Alg <: ALG) (bnd : int -> real) :
   (forall (numq : int) &m,
    0 <= numq =>
    Pr[G(Alg).main(numq) @ &m : res] <= bnd numq) =>
   (forall (numq1 numq2 : int),
-   0 <= numq1 <= numq2 => bnd numq1 <= bnd numq2) =>
+   0 <= numq1 < numq2 => bnd numq1 < bnd numq2) =>
   forall (numq1 numq2 : int) &m,
   0 <= numq1 => 0 <= numq2 =>
-  bnd numq1 < Pr[G(Alg).main(numq2) @ &m : res] =>
-  numq1 < numq2.
+  bnd numq1 <= Pr[G(Alg).main(numq2) @ &m : res] =>
+  forall (numq : int),
+  0 <= numq =>
+  Pr[G(Alg).main(numq2) @ &m : res] <= Pr[G(Alg).main(numq) @ &m : res] =>
+  numq1 <= numq.
 proof.
-move => main_lb bnd_leq_pres numq1 numq2 &m ge0_numq1 ge0_numq2 lb.
-case (numq1 < numq2) => [// |].
-rewrite -lezNgt => le_numq1_numq2.
-have le_bnd_numq2_numq1 : bnd numq2 <= bnd numq1.
-  by rewrite bnd_leq_pres le_numq1_numq2.
-have // : bnd numq2 < bnd numq2.
-rewrite (ler_lt_trans (bnd numq1)) //.
-rewrite (ltr_le_trans Pr[G(Alg).main(numq2) @ &m : res]) //.
-by rewrite main_lb.
+move => main_lb bnd_lt_pres numq1 numq2 &m ge0_numq1 ge0_numq2 lb.
+move => numq ge0_numq le_prob_numq2_numq1.
+case (numq1 <= numq) => [// |].
+rewrite -ltzNge => lt_numq_numq1.
+have // : bnd numq < bnd numq.
+  rewrite (ltr_le_trans (bnd numq1)) //.  
+  rewrite bnd_lt_pres 1:/#.
+  rewrite (ler_trans Pr[G(Alg).main(numq2) @ &m : res]) 1:lb.
+  rewrite (ler_trans Pr[G(Alg).main(numq) @ &m : res]) //.
+  by rewrite main_lb.
 qed.

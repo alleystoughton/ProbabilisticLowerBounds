@@ -1,5 +1,7 @@
 (* Lower Bound Proof for Adaptive Probabilistic Or *)
 
+prover quorum=1 ["Z3" "Alt-Ergo"].
+
 require import AllCore Distr DBool DInterval DProd List StdOrder.
 import RealOrder.
 
@@ -610,17 +612,20 @@ lemma lower_bound (Alg <: ALG) (numq1 numq2 : int) &m :
   islossless Alg.init => islossless Alg.query =>
   islossless Alg.answer => islossless Alg.result =>
   0 <= numq1 => 0 <= numq2 =>
-  1%r / 2%r + numq1%r / (arity * 2)%r <
-  Pr[G(Alg).main(numq2) @ &m : res] =>
-  numq1 < numq2.
+  1%r / 2%r + numq1%r / (arity * 2)%r <= Pr[G(Alg).main(numq2) @ &m : res] =>
+  forall (numq : int),
+  0 <= numq =>
+  Pr[G(Alg).main(numq2) @ &m : res] <= Pr[G(Alg).main(numq) @ &m : res] =>
+  numq1 <= numq.
 proof.
 move => Alg_init_ll Alg_query_ll Alg_answer_ll Alg_result_ll.
-move => ge0_numq1 ge0_numq2 lt_bnd_numq1_G_numq2.
+move => ge0_numq1 ge0_numq2 le_bnd_numq1_G_numq2.
 apply
   (lower_bound Alg (fun nq => 1%r / 2%r + nq%r / (arity * 2)%r)
    _ _ numq1 numq2 &m) => //.
 rewrite /=.
 move => numq &m0 ge0_numq /=.
 apply (G_up_bound Alg numq &m0 _ _ _ _) => //.
+rewrite /=.
 smt(ge1_arity).
 qed.
