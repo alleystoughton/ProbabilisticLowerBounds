@@ -31,15 +31,16 @@ op query (aqb : aux_query_basis) (qry : int) =
   else None.
 
 clone import ProbLowerBounds as PLBF with
-  type inp         <- bool,
-  type out         <- bool,
-  op arity         <- arity,
-  type aux         <- unit,
-  op good          <- fun _ _ => true,
-  op f             <- f,
-  type aux_query_basis <- aux_query_basis,
-  op daux_query_basis  <- daux_query_basis,
-  op query         <- query
+  type inp                  <- bool,
+  type out                  <- bool,
+  op arity                  <- arity,
+  type aux                  <- unit,
+  op good                   <- fun _ _ => true,
+  op f                      <- f,
+  type aux_query_basis      <- aux_query_basis,
+  op aux_of_aux_query_basis <- fun (aqb : aux_query_basis) => aqb.`2,
+  op daux_query_basis       <- daux_query_basis,
+  op query                  <- query
 proof *.
 realize ge0_arity. smt(ge1_arity). qed.
 realize good. smt(). qed.
@@ -628,7 +629,7 @@ have ge0_half : 0%r <= 1%r / 2%r by rewrite divr_ge0.
 smt().
 qed.
 
-lemma lower_bound (Alg <: ALG) (numq1 numq2 : int) &m :
+lemma le_lower_bound_lt_bnd_pre (Alg <: ALG) (numq1 numq2 : int) &m :
   islossless Alg.init => islossless Alg.query =>
   islossless Alg.answer => islossless Alg.result =>
   0 <= numq1 => 0 <= numq2 =>
@@ -641,7 +642,7 @@ proof.
 move => Alg_init_ll Alg_query_ll Alg_answer_ll Alg_result_ll.
 move => ge0_numq1 ge0_numq2 le_bnd_numq1_G_numq2.
 apply
-  (lower_bound Alg (fun nq => 1%r / 2%r + nq%r / (arity * 2)%r)
+  (le_lower_bound_lt_bnd_pres Alg (fun nq => 1%r / 2%r + nq%r / (arity * 2)%r)
    _ _ numq1 numq2 &m) => //.
 rewrite /=.
 move => numq &m0 ge0_numq /=.
@@ -651,4 +652,28 @@ rewrite ler_lt_add //.
 rewrite ltr_pmul2r.
 rewrite invr_gt0 lt_fromint; smt(ge1_arity).
 by rewrite lt_fromint.
+qed.
+
+lemma lt_lower_bound_le_bnd_pre (Alg <: ALG) (numq1 numq2 : int) &m :
+  islossless Alg.init => islossless Alg.query =>
+  islossless Alg.answer => islossless Alg.result =>
+  0 <= numq1 => 0 <= numq2 =>
+  1%r / 2%r + numq1%r / (arity * 2)%r < Pr[G(Alg).main(numq2) @ &m : res] =>
+  forall (numq : int),
+  0 <= numq =>
+  Pr[G(Alg).main(numq2) @ &m : res] <= Pr[G(Alg).main(numq) @ &m : res] =>
+  numq1 < numq.
+proof.
+move => Alg_init_ll Alg_query_ll Alg_answer_ll Alg_result_ll.
+move => ge0_numq1 ge0_numq2 lt_bnd_numq1_G_numq2.
+apply
+  (lt_lower_bound_le_bnd_pres Alg (fun nq => 1%r / 2%r + nq%r / (arity * 2)%r)
+   _ _ numq1 numq2 &m) => //=.
+move => numq &m0 ge0_numq /=.
+apply (G_up_bound Alg numq &m0 _ _ _ _) => //.
+move => /= nq1 nq2 [] ge0_nq1 lt_nq1_nq2.
+rewrite ler_add //.
+rewrite ler_pmul2r.
+rewrite invr_gt0 lt_fromint; smt(ge1_arity).
+by rewrite le_fromint.
 qed.
