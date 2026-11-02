@@ -7,13 +7,15 @@ import RealOrder.
 
 require ProbLowerBounds.
 
-(* number of arguments to or function *)
+(* number of arguments to or function - must be at least 1 *)
 
 op arity : {int | 1 <= arity} as ge1_arity.
 
 op some_true (inps : bool list) =
   exists (i : int),
   0 <= i < arity /\ nth witness inps i = true.
+
+(* we don't need an auxiliary value, so use unit as the type *)
 
 op f (_ : unit, xs : bool list) =
   if size xs <> arity
@@ -22,15 +24,31 @@ op f (_ : unit, xs : bool list) =
 
 type aux_query_basis = (int * bool) * unit.
 
+(* ((i, b), ()) is in the support of daux_query_basis when
+   0 <= i < arith *)
+
 op daux_query_basis : aux_query_basis distr =
   ([0 .. arity - 1] `*` {0,1}) `*` duniform [()].
+
+op aux_of_aux_query_basis (aqb : aux_query_basis) : unit option =
+  if aqb \in daux_query_basis then Some () else None.
+
+(* if aqb is ((i, b), ()), for 0 <= i < arity, and 0 <= qry <
+   arity, then query aqb qry returns Some true, if i = qry and b is
+   true, and returns Some false otherwise
+
+   if aqb is ((i, b), ()), for i < 0 or i >= arity, or qry < 0 or
+   qry >= arity, then query aqb qry returns None *)
 
 op query (aqb : aux_query_basis) (qry : int) =
   if aqb \in daux_query_basis /\ 0 <= qry < arity
   then Some (if aqb.`1.`1 = qry then aqb.`1.`2 else false)
   else None.
 
-clone import ProbLowerBounds as PLBF with
+(* we clone the general framework with our parameters, proving
+   the resulting axioms as lemmas *)
+
+clone import ProbLowerBounds as PLB with
   type inp                  <- bool,
   type out                  <- bool,
   op arity                  <- arity,
@@ -38,7 +56,7 @@ clone import ProbLowerBounds as PLBF with
   op good                   <- fun _ _ => true,
   op f                      <- f,
   type aux_query_basis      <- aux_query_basis,
-  op aux_of_aux_query_basis <- fun (aqb : aux_query_basis) => aqb.`2,
+  op aux_of_aux_query_basis <- aux_of_aux_query_basis,
   op daux_query_basis       <- daux_query_basis,
   op query                  <- query
 proof *.
@@ -50,11 +68,13 @@ rewrite /daux_query_basis dprod_ll dprod_ll drange_ll /=.
 smt(ge1_arity).
 by rewrite dbool_ll duniform_ll.
 qed.
-realize query_in_range. smt(). qed.
-realize query_out_range. smt(). qed.
+realize aux_of_good_aux_query_basis. smt(). qed.
+realize aux_of_bad_aux_query_basis. smt(). qed.
+realize query_in_range_and_aqb_good. smt(). qed.
+realize query_out_range_or_aqb_bad. smt(). qed.
 realize query_good. trivial. qed.
 
-(* see after the section for the main result *)
+(* see after the section for the main results *)
 
 section.
 
@@ -73,8 +93,7 @@ lemma f_inputs_eq_aqb12 (aqb : aux_query_basis) :
   f () (inputs aqb) = Some (aqb.`1.`2).
 proof.
 move => aqb_in_basis aqb11_in_rng.
-rewrite /f /inputs /query /=.
-rewrite size_map size_range /=.
+rewrite /f /inputs /query /= size_map size_range /=.
 have -> /= : max 0 arity = arity
   by rewrite lez_maxr 1:(lez_trans 1) // ge1_arity.
 case aqb.`1.`2 => _.
@@ -85,8 +104,8 @@ rewrite (nth_map witness) 1:size_range /=.
 rewrite IntOrder.ler_maxr 1:(lez_trans 1) // 1:ge1_arity.
 rewrite eqT aqb_in_basis /=.
 have -> /= :
-  0 <= nth witness<:int> (range 0 arity) aqb.`1.`1 < arity.
-  rewrite nth_range //.
+  0 <= nth witness<:int> (range 0 arity) aqb.`1.`1 < arity
+  by rewrite nth_range.
 by rewrite nth_range.
 rewrite neqF /some_true negb_exists => i /=.
 rewrite eqT negb_and.
@@ -95,9 +114,11 @@ rewrite (nth_map witness) 1:size_range /=.
 rewrite IntOrder.ler_maxr 1:(lez_trans 1) // 1:ge1_arity.
 rewrite aqb_in_basis /=.
 have -> // :
-  0 <= nth witness<:int> (range 0 arity) i < arity.
+  0 <= nth witness<:int> (range 0 arity) i < arity
   by rewrite nth_range.  
 qed.
+
+(* now we simplify our game *)
 
 local module G0 = {
   proc main(numq : int) : bool = {
@@ -106,8 +127,7 @@ local module G0 = {
     var j : int;
     var b, b', a : bool;
     (* choose the two random parameters used to answer queries *)
-    j <$ [0 .. arity - 1];
-    b <$ {0,1};
+    j <$ [0 .. arity - 1]; b <$ {0,1};
     (* initialize the algorithm *)
     Alg.init((), numq);
     (* let algorithm adaptively issue its numq queries *)
@@ -193,13 +213,8 @@ transitivity{1}
    r1{1} \in [0 .. arity - 1] `*` {0,1}) => //.
 smt().
 progress.
-rewrite /daux_query_basis.
-rewrite 2!supp_dprod.
-rewrite supp_drange.
-rewrite supp_dbool.
-rewrite supp_duniform.
-simplify.
-smt().
+rewrite /daux_query_basis 2!supp_dprod supp_drange supp_dbool.
+rewrite supp_duniform /= /#.
 call PS2.sample_sample2; first auto.
 inline; auto; progress.
 rewrite supp_dinter /# in H.
@@ -336,9 +351,11 @@ proc
   (={bad}(G1, G2))
   (G1.bad{1}); first 2 smt().
 apply Alg_answer_ll.
+auto; progress.
+smt().
 (* smt can prove that the answer is false in G1 when
    the bad event is false *)
-auto; smt().
+smt(). smt().
 auto; smt().
 qed.
 
@@ -623,11 +640,14 @@ lemma G_up_bound (Alg <: ALG) (numq' : int) &m :
 proof.
 move => Alg_init_ll Alg_query_ll Alg_answer_ll Alg_result_ll ge0_numq'.
 have close_bnd := G_close_to_half_up_bound Alg numq' &m _ _ _ _ => //.
-have ge0_pr : 0%r <= Pr[G(Alg).main(numq') @ &m : res]
-  by rewrite Pr [mu_ge0].
+have ge0_pr : 0%r <= Pr[G(Alg).main(numq') @ &m : res] by rewrite Pr [mu_ge0].
 have ge0_half : 0%r <= 1%r / 2%r by rewrite divr_ge0.
 smt().
 qed.
+
+(* we use G_up_bound to prove two lower bound results, which is
+   possible because our upper bound, as a function of numq, preserves
+   both < and <= *)
 
 lemma le_lower_bound_lt_bnd_pre (Alg <: ALG) (numq1 numq2 : int) &m :
   islossless Alg.init => islossless Alg.query =>
@@ -640,7 +660,7 @@ lemma le_lower_bound_lt_bnd_pre (Alg <: ALG) (numq1 numq2 : int) &m :
   numq1 <= numq.
 proof.
 move => Alg_init_ll Alg_query_ll Alg_answer_ll Alg_result_ll.
-move => ge0_numq1 ge0_numq2 le_bnd_numq1_G_numq2.
+move => ge0_numq1 ge0_numq2 le_bnd_numq1_prob_G_numq2.
 apply
   (le_lower_bound_lt_bnd_pres Alg (fun nq => 1%r / 2%r + nq%r / (arity * 2)%r)
    _ _ numq1 numq2 &m) => //.
@@ -648,8 +668,7 @@ rewrite /=.
 move => numq &m0 ge0_numq /=.
 apply (G_up_bound Alg numq &m0 _ _ _ _) => //.
 move => /= nq1 nq2 [] ge0_nq1 lt_nq1_nq2.
-rewrite ler_lt_add //.
-rewrite ltr_pmul2r.
+rewrite ler_lt_add // ltr_pmul2r.
 rewrite invr_gt0 lt_fromint; smt(ge1_arity).
 by rewrite lt_fromint.
 qed.
@@ -665,15 +684,14 @@ lemma lt_lower_bound_le_bnd_pre (Alg <: ALG) (numq1 numq2 : int) &m :
   numq1 < numq.
 proof.
 move => Alg_init_ll Alg_query_ll Alg_answer_ll Alg_result_ll.
-move => ge0_numq1 ge0_numq2 lt_bnd_numq1_G_numq2.
+move => ge0_numq1 ge0_numq2 lt_bnd_numq1_prob_G_numq2.
 apply
   (lt_lower_bound_le_bnd_pres Alg (fun nq => 1%r / 2%r + nq%r / (arity * 2)%r)
    _ _ numq1 numq2 &m) => //=.
 move => numq &m0 ge0_numq /=.
 apply (G_up_bound Alg numq &m0 _ _ _ _) => //.
-move => /= nq1 nq2 [] ge0_nq1 lt_nq1_nq2.
-rewrite ler_add //.
-rewrite ler_pmul2r.
+move => /= nq1 nq2 [] ge0_nq1 le_nq1_nq2.
+rewrite ler_add // ler_pmul2r.
 rewrite invr_gt0 lt_fromint; smt(ge1_arity).
 by rewrite le_fromint.
 qed.

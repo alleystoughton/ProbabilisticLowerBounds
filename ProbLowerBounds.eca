@@ -1,5 +1,8 @@
 (* Probabilistic Lower Bounds Framework *)
 
+(* A general framework for proving probabilistic lower bound
+   results in the query model. *)
+
 prover quorum=2 ["Z3" "Alt-Ergo"].
 
 require import AllCore Distr List StdOrder.
@@ -13,7 +16,7 @@ type inp.  (* type of inputs to f *)
 
 type out.  (* type of output of f *)
 
-(* arity of f, number of arguments *)
+(* arity of f, number of arguments, of type inp *)
 
 op arity : {int | 0 <= arity} as ge0_arity.
 
@@ -42,52 +45,64 @@ axiom good (aux : aux, inps : inp list) :
 axiom bad (aux : aux, inps : inp list) :
   size inps <> arity \/ ! good aux inps => f aux inps = None.
 
-(* the basis for choosing auxiliary value or answering a query *)
+(* the basis for choosing the auxiliary value or answering a query *)
 
 type aux_query_basis.
 
-op aux_of_aux_query_basis : aux_query_basis -> aux.
-
-(* converts an auxiliary value to a distribution on aux_query_basis *)
+(* sub-distribution on aux_query_basis *)
 
 op daux_query_basis : aux_query_basis distr.
 
-(* all we assume about daux_query_basis is losslessness *)
+(* all we assume about daux_query_basis is losslessness, i.e., that
+   it is a distribution *)
 
 axiom daux_query_basis_ll : is_lossless daux_query_basis.
 
-(* answer a query based on the value of a aux query basis, which
-   should be in the support of daux_query_basis *)
+(* convert an aux query basis an auxiliary value *)
+
+op aux_of_aux_query_basis : aux_query_basis -> aux option.
+
+axiom aux_of_good_aux_query_basis (aqb : aux_query_basis) :
+  aqb \in daux_query_basis =>
+  aux_of_aux_query_basis aqb <> None.
+
+axiom aux_of_bad_aux_query_basis (aqb : aux_query_basis) :
+  aqb \notin daux_query_basis =>
+  aux_of_aux_query_basis aqb = None.
+
+(* answer a query based on the value of an aux query basis *)
 
 op query : aux_query_basis -> int -> inp option.
 
 (* when aqb is in the support of daux_query_basis and i is a good
-   query, we require that query aqb i is Some of an inp *)
+   query, i.e., 0 <= i < arity, we require that query aqb i is Some of
+   an inp *)
 
-axiom query_in_range (aqb : aux_query_basis, i : int) :
+axiom query_in_range_and_aqb_good (aqb : aux_query_basis, i : int) :
   aqb \in daux_query_basis => 0 <= i < arity =>
   query aqb i <> None.
 
 (* when aqb is not in the support of daux_query_basis or
   i is a bad query, we require that query aqb i = None *)
 
-axiom query_out_range (aqb : aux_query_basis, i : int) :
+axiom query_out_range_or_aqb_bad (aqb : aux_query_basis, i : int) :
   aqb \notin daux_query_basis \/ i < 0 \/ arity <= i =>
   query aqb i = None.
 
-(* the input list corresponding to a query basis; will have
-   size arity *)
+(* the input list corresponding to an aux query basis; will have size
+   arity, but won't be meaningful if the aux query basis is not in
+   the support of daux_query_basis *)
 
 op inputs (aqb : aux_query_basis) : inp list =
   map (oget \o query aqb) (range 0 arity).
 
-(* the input list corresponding to a query basis that's in the support
-   of daux_query_basis aux, for the auxiliary value aux, is good relative
-   to aux *)
+(* the input list corresponding to an aux query basis aqb that's in the
+   support of daux_query_basis is good relative to the auxiliary
+   value corresponding to aqb *)
 
 axiom query_good (aqb : aux_query_basis) :
   aqb \in daux_query_basis =>
-  good (aux_of_aux_query_basis aqb) (inputs aqb).
+  good (oget (aux_of_aux_query_basis aqb)) (inputs aqb).
 
 (* end of theory parameters *)
 
@@ -96,7 +111,8 @@ axiom query_good (aqb : aux_query_basis) :
    algorithms can have persistent local state and can be probabilistic *)
 
 module type ALG = {
-  (* initialization, supplying auxiliary value *)
+  (* initialization, supplying auxiliary value and allowed number
+     of queries *)
 
   proc init(aux : aux, numq : int) : unit
 
@@ -115,8 +131,7 @@ module type ALG = {
 }.
 
 (* game in which algorithm tries to predict the result of the
-   computational problem based on an auxiliary value and input list
-   sampled from daux_query_basis
+   computational problem based a sampled aux query basis
 
    the algorithm makes numq, an argument to main, possibly adaptive
    queries of the input list *)
@@ -127,9 +142,9 @@ module G(Alg : ALG) = {
     var i : int <- 0; var qry : int; var out : out;
     (* choose the aux query basis *)
     aqb <$ daux_query_basis;
-    (* split it into auxiliary value and query_basis *)
-    aux <- aux_of_aux_query_basis aqb;
-    (* initialize the algorithm, giving it aux *)
+    (* obtain the auxiliary value *)
+    aux <- oget (aux_of_aux_query_basis aqb);
+    (* initialize the algorithm, giving it aux and numq *)
     Alg.init(aux, numq);
     (* let algorithm adaptively issue its numq queries *)
     while (i < numq) {
@@ -172,15 +187,15 @@ by rewrite is_losslessP 1:daux_query_basis_ll.
 smt().
 qed.
 
-(* lemma taking the main upper bound lemma for a computational problem
+(* lemma taking the main upper bound lemma for an algorithm Alg
    plus a proof that the bound preserves < for numbers of queries,
    and concluding that:
 
    if running G with numq2 queries, for 0 <= numq2, has at least the
-   probability of Alg winning as does the bound of numq1, then for all
-   0 <= numq, if running G with numq queries has at least the
-   probability of Alg winning as does running it with numq2 queries,
-   then numq1 <= numq *)
+   probability of Alg winning the game as the bound for numq1, for 0
+   <= numq1, then for all 0 <= numq, if running G with numq queries
+   has at least the probability of Alg winning as does running it with
+   numq2 queries, then numq1 <= numq *)
 
 lemma le_lower_bound_lt_bnd_pres (Alg <: ALG) (bnd : int -> real) :
   (forall (numq : int) &m,
@@ -195,27 +210,25 @@ lemma le_lower_bound_lt_bnd_pres (Alg <: ALG) (bnd : int -> real) :
   Pr[G(Alg).main(numq2) @ &m : res] <= Pr[G(Alg).main(numq) @ &m : res] =>
   numq1 <= numq.
 proof.
-move => main_ub bnd_lt_pres numq1 numq2 &m ge0_numq1 ge0_numq2 lb.
-move => numq ge0_numq le_prob_numq2_numq1.
-case (numq1 <= numq) => [// |].
-rewrite -ltzNge => lt_numq_numq1.
+move => main_ub bnd_lt_pres numq1 numq2 &m ge0_numq1 ge0_numq2.
+move => bnd_numq1_le_prob_numq2 numq ge0_numq le_prob_numq2_numq1.
+case (numq1 <= numq) => [// |]; rewrite -ltzNge => lt_numq_numq1.
 have // : bnd numq < bnd numq.
-  rewrite (ltr_le_trans (bnd numq1)) //.  
-  rewrite bnd_lt_pres 1:/#.
-  rewrite (ler_trans Pr[G(Alg).main(numq2) @ &m : res]) 1:lb.
+  rewrite (ltr_le_trans (bnd numq1)) // 1:bnd_lt_pres 1:/#.
+  rewrite (ler_trans Pr[G(Alg).main(numq2) @ &m : res]) //.
   rewrite (ler_trans Pr[G(Alg).main(numq) @ &m : res]) //.
   by rewrite main_ub.
 qed.
 
-(* lemma taking the main upper bound lemma for a computational problem
+(* lemma taking the main upper bound lemma for an algorithm Alg
    plus a proof that the bound preserves <= for numbers of queries,
    and concluding that:
 
    if running G with numq2 queries, for 0 <= numq2, has strictly
-   greater probability of Alg winning than the bound of numq1, then
-   for all 0 <= numq, if running G with numq queries has at least the
-   probability of Alg winning as does running it with numq2 queries,
-   then numq1 < numq *)
+   greater probability of Alg winning the game than the bound for
+   numq1, for 0 <= numq1, then for all 0 <= numq, if running G with
+   numq queries has at least the probability of Alg winning as does
+   running it with numq2 queries, then numq1 < numq *)
 
 lemma lt_lower_bound_le_bnd_pres (Alg <: ALG) (bnd : int -> real) :
   (forall (numq : int) &m,
@@ -231,8 +244,8 @@ lemma lt_lower_bound_le_bnd_pres (Alg <: ALG) (bnd : int -> real) :
   Pr[G(Alg).main(numq2) @ &m : res] <= Pr[G(Alg).main(numq) @ &m : res] =>
   numq1 < numq.
 proof.
-move => main_ub bnd_le_pres numq1 numq2 &m ge0_numq1 ge0_numq2 lb.
-move => numq ge0_numq le_prob_numq2_numq1.
+move => main_ub bnd_le_pres numq1 numq2 &m ge0_numq1 ge0_numq2.
+move => bnd_numq1_lt_prob_numq2 numq ge0_numq le_prob_numq2_numq1.
 case (numq1 < numq) => [// |].
 rewrite -lezNgt => le_numq_numq1.
 have // : bnd numq < bnd numq.
