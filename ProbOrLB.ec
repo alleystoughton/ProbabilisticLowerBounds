@@ -430,22 +430,14 @@ qed.
 (* bound the probability of failure in G2' (not clear how to do
    this directly on G2) *)
 
-lemma count_mem_uniq_le_size_of_mem (xs ys : 'a list) :
-  uniq ys => count (mem xs) ys <= size xs.
-proof.
-move => uniq_ys.
-have -> : mem xs = mem (undup xs).
-  apply fun_ext => y; by rewrite mem_undup.
-rewrite count_swap // 1:undup_uniq.
-rewrite (lez_trans (size (undup xs))) 1:count_size size_undup.
-qed.
-
 lemma mu_arity_rng_mem_qrys_ub (qrys : int list) :
   mu [0 .. arity - 1] (mem qrys) <= (size qrys)%r / arity%r.
 proof.
-rewrite dinterE /= lez_maxr 1:(lez_trans 1) // 1:ge1_arity ler_pmul2r.
-rewrite invr_gt0 lt_fromint ltzE ge1_arity.
-rewrite le_fromint size_filter count_mem_uniq_le_size_of_mem range_uniq.
+rewrite mu_mem_le_mu1 => x.
+rewrite dinter1E /=.
+case (0 <= x <= arity - 1) => [x_in_rng | _].
+rewrite lef_pinv 1:lt_fromint; smt(ge1_arity).
+rewrite invr_ge0 le_fromint; smt(ge1_arity).
 qed.
 
 local lemma G2'_bad (numq' : int) &m :
