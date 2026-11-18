@@ -440,6 +440,14 @@ rewrite count_swap // 1:undup_uniq.
 rewrite (lez_trans (size (undup xs))) 1:count_size size_undup.
 qed.
 
+lemma mu_arity_rng_mem_qrys_ub (qrys : int list) :
+  mu [0 .. arity - 1] (mem qrys) <= (size qrys)%r / arity%r.
+proof.
+rewrite dinterE /= lez_maxr 1:(lez_trans 1) // 1:ge1_arity ler_pmul2r.
+rewrite invr_gt0 lt_fromint ltzE ge1_arity.
+rewrite le_fromint size_filter count_mem_uniq_le_size_of_mem range_uniq.
+qed.
+
 local lemma G2'_bad (numq' : int) &m :
   0 <= numq' =>
   Pr[G2'.main(numq') @ &m : G2'.bad] <= numq'%r / (arity * 2)%r.
@@ -472,11 +480,9 @@ seq 1 :
   0%r
   (numq = numq') => //.
 auto.
-rnd; simplify.
+rnd (mem qrys); simplify.
 auto; progress.
-rewrite dinterE /= lez_maxr 1:(lez_trans 1) // 1:ge1_arity ler_pmul2r.
-rewrite invr_gt0 lt_fromint ltzE ge1_arity.
-rewrite le_fromint size_filter count_mem_uniq_le_size_of_mem range_uniq.
+apply mu_arity_rng_mem_qrys_ub.
 rewrite mulr_ge0 1:le_fromint //.
 rewrite invr_ge0 le_fromint 1:(lez_trans 1) // ge1_arity.
 rnd (pred1 true); simplify.
